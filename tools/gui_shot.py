@@ -19,7 +19,7 @@ profile = tmp / "profile"
 (profile / "extensions").mkdir(parents=True)
 if "--empty" not in sys.argv:
     core.set_profiles([profile])
-    for name, ver, link in [("Zen Tabs", "0.3.1", True), ("Мой переводчик", "1.0", False),
+    for name, ver, link in [("Zen Tabs", "0.3.1", True), ("My Translator", "1.0", False),
                             ("Chrome Thing", "5.2", False)]:
         src = tmp / "src" / name
         src.mkdir(parents=True)

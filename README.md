@@ -9,7 +9,7 @@ What you can add:
 - a `.crx` from Chrome;
 - a link: a direct file link, an addons.mozilla.org page, or a Chrome Web Store page.
 
-The app's interface is in Russian.
+The interface is in English and Russian (see "Language").
 
 ![App window](docs/window.png)
 
@@ -47,6 +47,7 @@ zen-ext list                                 # what's added and its state in Zen
 zen-ext remove zen-tabs                      # by ID or part of the name
 zen-ext sync                                 # put everything back into the profile (e.g. after removing it in Zen)
 zen-ext profiles                             # Zen profiles
+zen-ext language ru                          # interface language: en, ru or auto
 ```
 
 Extra `add` options:
@@ -58,6 +59,10 @@ Extra `add` options:
 | `--replace` | replace an extension with the same ID installed in Zen from the store |
 
 Changes take effect **after restarting Zen**. That's how Firefox handles extensions installed through the profile folder.
+
+## Language
+
+The interface is in English by default and switches to Russian when the system language is Russian. To pick a language yourself, use the window menu → "Language", or `zen-ext language en|ru`. `zen-ext language auto` goes back to following the system. The choice is saved and applies to both the window and the commands. The `ZEN_EXT_LANG=en|ru` environment variable overrides it for a single run.
 
 ## How it works
 
@@ -84,13 +89,13 @@ Zen Flatpak updates don't break anything: everything is stored in the profile, n
 
 ## States in the list
 
-| State | Shown in the app as | Meaning |
-|---|---|---|
-| active | работает | Zen has loaded the extension |
-| pending / pending update | загрузится / обновится после перезапуска Zen | the file is in place, Zen hasn't seen it yet |
-| disabled | выключено в Zen | disabled in `about:addons`, re-enable it there |
-| incompatible | Zen не может его загрузить | not compatible, see `about:addons` for details |
-| missing | удалено из профиля | removed in Zen. `zen-ext sync` brings it back, `zen-ext remove` removes it from the list |
+| State | Meaning |
+|---|---|
+| running | Zen has loaded the extension |
+| will load / will update after restarting Zen | the file is in place, Zen hasn't seen it yet |
+| disabled in Zen | disabled in `about:addons`, re-enable it there |
+| Zen can't load it | not compatible, see `about:addons` for details |
+| removed from the profile | removed in Zen. `zen-ext sync` brings it back, `zen-ext remove` removes it from the list |
 
 ## Limitations
 
@@ -126,6 +131,7 @@ zen_ext/
   cli.py     zen-ext commands
   gui.py     window (GTK 4 + libadwaita)
   watch.py   background rebuild of linked folders
+  i18n.py    interface language and the Russian translation
 install.sh, uninstall.sh
 tests/, tools/
 ```

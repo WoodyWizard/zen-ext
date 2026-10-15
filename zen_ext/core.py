@@ -34,6 +34,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import i18n
+from .i18n import _
+
 APP = "zen-ext"
 DATA_DIR = Path(
     os.environ.get("ZEN_EXT_HOME")
@@ -137,7 +140,7 @@ def _read_ini(path):
 def profile_from_path(path):
     path = Path(path).expanduser().resolve()
     if not path.is_dir():
-        raise ZenExtError(f"Папка профиля не найдена: {path}")
+        raise ZenExtError(_("Profile folder not found: {path}", path=path))
     for p in find_profiles():
         if p.path == path:
             return p
@@ -243,7 +246,7 @@ class _Source:
         self.is_crx = False
         if self.path.is_dir():
             if not (self.path / "manifest.json").is_file():
-                raise ZenExtError(f"В папке нет manifest.json: {self.path}")
+                raise ZenExtError(_("No manifest.json in the folder: {path}", path=self.path))
             return
         data = self.path.read_bytes()
         if data[:4] == b"Cr24":
@@ -252,7 +255,7 @@ class _Source:
         try:
             self.zip = zipfile.ZipFile(io.BytesIO(data))
         except zipfile.BadZipFile:
-            raise ZenExtError(f"Это не расширение (.xpi, .zip, .crx): {self.path}") from None
+            raise ZenExtError(_("Not an extension (.xpi, .zip, .crx): {path}", path=self.path)) from None
         names = self.zip.namelist()
         if "manifest.json" not in names:
             # GitHub-style archives wrap everything in one top folder.
@@ -260,7 +263,7 @@ class _Source:
             if len(tops) == 1 and f"{next(iter(tops))}/manifest.json" in names:
                 self.prefix = next(iter(tops)) + "/"
             else:
-                raise ZenExtError(f"В архиве нет manifest.json: {self.path}")
+                raise ZenExtError(_("No manifest.json in the archive: {path}", path=self.path))
 
     def read(self, name):
         if self.zip is not None:
@@ -299,7 +302,7 @@ def _crx_to_zip(data):
     if version == 3:
         header_len = struct.unpack("<I", data[8:12])[0]
         return data[12 + header_len:]
-    raise ZenExtError(f"Неизвестная версия CRX: {version}")
+    raise ZenExtError(_("Unknown CRX version: {version}", version=version))
 
 
 def _parse_json(raw, what):
@@ -312,7 +315,7 @@ def _parse_json(raw, what):
         try:
             return json.loads(stripped)
         except json.JSONDecodeError as e:
-            raise ZenExtError(f"Ошибка в {what}: {e}") from None
+            raise ZenExtError(_("Error in {what}: {error}", what=what, error=e)) from None
 
 
 def _localized(value, manifest, src):
@@ -360,24 +363,25 @@ def build_xpi(src_path, out_path, forced_id=None):
 
     ext_id = manifest_id(manifest)
     if forced_id and ext_id and forced_id != ext_id:
-        raise ZenExtError(f"ID в manifest.json ({ext_id}) не совпадает с указанным ({forced_id})")
+        raise ZenExtError(_("The ID in manifest.json ({ext_id}) doesn't match the one given ({forced_id})",
+                            ext_id=ext_id, forced_id=forced_id))
     if not ext_id:
         ext_id = forced_id or generate_id(name)
         key = ("applications" if "applications" in manifest
                and "browser_specific_settings" not in manifest else "browser_specific_settings")
         manifest.setdefault(key, {}).setdefault("gecko", {})["id"] = ext_id
         changed = True
-        notes.append(f"В manifest.json не было ID, назначен {ext_id}")
+        notes.append(_("manifest.json had no ID, assigned {ext_id}", ext_id=ext_id))
     if not ID_RE.match(ext_id):
-        raise ZenExtError(f"Недопустимый ID расширения: {ext_id}")
+        raise ZenExtError(_("Invalid extension ID: {ext_id}", ext_id=ext_id))
 
     bg = manifest.get("background") or {}
     if bg.get("service_worker") and not bg.get("scripts"):
         bg["scripts"] = [bg["service_worker"]]
         manifest["background"] = bg
         changed = True
-        notes.append("Chrome service worker подключён как фоновый скрипт: "
-                     "importScripts() и другие API воркеров в Zen не работают")
+        notes.append(_("The Chrome service worker is loaded as a background script: "
+                       "importScripts() and other worker APIs don't work in Zen"))
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -421,9 +425,9 @@ def download(url, dest_dir):
             data = r.read()
             final = r.geturl()
     except OSError as e:
-        raise ZenExtError(f"Не удалось скачать {url}: {e}") from None
+        raise ZenExtError(_("Couldn't download {url}: {error}", url=url, error=e)) from None
     if data[:2] != b"PK" and data[:4] != b"Cr24":
-        raise ZenExtError(f"По ссылке не расширение (ни .xpi/.zip, ни .crx): {url}")
+        raise ZenExtError(_("The link isn't an extension (not .xpi/.zip or .crx): {url}", url=url))
     name = Path(urllib.parse.urlparse(final).path).name or "extension"
     dest = Path(dest_dir) / re.sub(r"[^\w.@{}-]+", "_", urllib.parse.unquote(name))
     dest.write_bytes(data)
@@ -440,7 +444,7 @@ def _resolve_store_url(url):
             with urllib.request.urlopen(req, timeout=30) as r:
                 return json.load(r)["current_version"]["file"]["url"]
         except (OSError, KeyError, ValueError) as e:
-            raise ZenExtError(f"Не удалось найти файл на addons.mozilla.org: {e}") from None
+            raise ZenExtError(_("Couldn't find the file on addons.mozilla.org: {error}", error=e)) from None
     m = re.search(r"/([a-p]{32})(?:[/?#]|$)", u.path)
     if u.netloc in ("chromewebstore.google.com", "chrome.google.com") and m:
         return ("https://clients2.google.com/service/update2/crx?response=redirect"
@@ -488,12 +492,12 @@ def add(source, link=None, ext_id=None, replace=False, on_notes=None):
             if path.name == "manifest.json":
                 path = path.parent
             if not path.exists():
-                raise ZenExtError(f"Не найдено: {path}")
+                raise ZenExtError(_("Not found: {path}", path=path))
             origin = str(path)
         if link is None:
             link = path.is_dir()
         if link and not path.is_dir():
-            raise ZenExtError("Связать можно только папку с исходниками")
+            raise ZenExtError(_("Only a source folder can be linked"))
 
         with locked_state() as state:
             if link and not ext_id:
@@ -506,13 +510,14 @@ def add(source, link=None, ext_id=None, replace=False, on_notes=None):
                 meta = build_xpi(path, staged, forced_id=ext_id)
                 profiles = target_profiles(state)
                 if not profiles:
-                    raise ZenExtError("Профиль Zen не найден. Запусти Zen хотя бы раз или укажи профиль: zen-ext setup --profile ПУТЬ")
+                    raise ZenExtError(_("No Zen profile found. Start Zen at least once or set the profile: "
+                                        "zen-ext setup --profile PATH"))
                 if meta["id"] not in state["extensions"] and not replace:
                     for p in profiles:
                         if installed_path(p, meta["id"]).exists():
                             raise ZenExtError(
-                                f"{meta['id']} уже установлено в Zen (например, из магазина). "
-                                "Удали его в Zen или добавь с заменой (--replace)")
+                                _("{ext_id} is already installed in Zen (e.g. from the store). "
+                                  "Remove it in Zen or add it with --replace", ext_id=meta["id"]))
                 os.replace(staged, STORE_DIR / f"{meta['id']}.xpi")
             finally:
                 staged.unlink(missing_ok=True)
@@ -543,7 +548,7 @@ def rebuild(ext_id, state):
     entry = state["extensions"][ext_id]
     folder = Path(entry["source"])
     if not folder.is_dir():
-        raise ZenExtError(f"Папка исходников пропала: {folder}")
+        raise ZenExtError(_("The source folder is gone: {path}", path=folder))
     staged = STORE_DIR / f".staged-{os.getpid()}.xpi"
     try:
         meta = build_xpi(folder, staged, forced_id=ext_id)
@@ -573,8 +578,9 @@ def find_entry(state, query):
     if len(hits) == 1:
         return hits[0]
     if not hits:
-        raise ZenExtError(f"Нет такого расширения: {query}")
-    raise ZenExtError(f"Под «{query}» подходит несколько: " + ", ".join(e["name"] for e in hits))
+        raise ZenExtError(_("No such extension: {query}", query=query))
+    raise ZenExtError(_("Several extensions match “{query}”: {names}",
+                         query=query, names=", ".join(e["name"] for e in hits)))
 
 
 def sync():
@@ -627,6 +633,16 @@ def purge():
     return profiles
 
 
+def set_language(lang):
+    """Save the interface language: one of i18n.LANGUAGES, or "auto" to follow the system."""
+    with locked_state() as state:
+        if lang in i18n.LANGUAGES:
+            state["language"] = lang
+        else:
+            state.pop("language", None)
+    i18n.use(lang)
+
+
 def _now():
     return time.strftime("%Y-%m-%dT%H:%M:%S")
 
@@ -640,14 +656,18 @@ def _tmp_root():
 # ---------------------------------------------------------------- status
 
 STATUS_TEXT = {
-    "active": "работает",
-    "pending": "загрузится после перезапуска Zen",
-    "pending-update": "обновится после перезапуска Zen",
-    "disabled": "выключено в Zen",
-    "incompatible": "Zen не может его загрузить",
-    "missing": "удалено из профиля (zen-ext sync вернёт)",
-    "inactive": "не запущено",
+    "active": "running",
+    "pending": "will load after restarting Zen",
+    "pending-update": "will update after restarting Zen",
+    "disabled": "disabled in Zen",
+    "incompatible": "Zen can't load it",
+    "missing": "removed from the profile (zen-ext sync restores it)",
+    "inactive": "not running",
 }
+
+
+def status_text(code):
+    return _(STATUS_TEXT[code])
 
 
 def zen_addons(profile):

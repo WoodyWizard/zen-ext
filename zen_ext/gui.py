@@ -11,7 +11,8 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
 
-from . import core  # noqa: E402
+from . import core, i18n  # noqa: E402
+from .i18n import _  # noqa: E402
 
 APP_ID = "io.github.zen_ext.Manager"
 REFRESH_SECONDS = 3
@@ -29,24 +30,29 @@ STATUS_ICON = {
 
 class Window(Adw.ApplicationWindow):
     def __init__(self, app):
-        super().__init__(application=app, title="Расширения Zen", default_width=640,
+        super().__init__(application=app, title=_("Zen Extensions"), default_width=640,
                          default_height=620)
         self._shown = None
 
         header = Adw.HeaderBar()
         add_menu = Gio.Menu()
-        add_menu.append("Файл (.xpi, .zip, .crx)…", "win.add-file")
-        add_menu.append("Папка с исходниками…", "win.add-folder")
-        add_menu.append("По ссылке…", "win.add-url")
+        add_menu.append(_("File (.xpi, .zip, .crx)…"), "win.add-file")
+        add_menu.append(_("Source Folder…"), "win.add-folder")
+        add_menu.append(_("From URL…"), "win.add-url")
         add_btn = Gtk.MenuButton(icon_name="list-add-symbolic", menu_model=add_menu,
-                                 tooltip_text="Добавить расширение")
+                                 tooltip_text=_("Add extension"))
         header.pack_start(add_btn)
         main_menu = Gio.Menu()
-        main_menu.append("Профили Zen…", "win.profiles")
-        main_menu.append("Применить всё заново", "win.sync")
-        main_menu.append("Папка с данными", "win.open-data")
+        main_menu.append(_("Zen Profiles…"), "win.profiles")
+        main_menu.append(_("Reapply Everything"), "win.sync")
+        main_menu.append(_("Data Folder"), "win.open-data")
+        lang_menu = Gio.Menu()
+        lang_menu.append(_("System Default"), "win.language::auto")
+        for code, name in i18n.LANGUAGES.items():
+            lang_menu.append(name, f"win.language::{code}")
+        main_menu.append_submenu(_("Language"), lang_menu)
         header.pack_end(Gtk.MenuButton(icon_name="open-menu-symbolic", menu_model=main_menu,
-                                       tooltip_text="Меню"))
+                                       tooltip_text=_("Menu")))
 
         for name, cb in [("add-file", self.on_add_file), ("add-folder", self.on_add_folder),
                          ("add-url", self.on_add_url), ("profiles", self.on_profiles),
@@ -54,6 +60,11 @@ class Window(Adw.ApplicationWindow):
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", lambda *_a, cb=cb: cb())
             self.add_action(action)
+        lang = Gio.SimpleAction.new_stateful(
+            "language", GLib.VariantType.new("s"),
+            GLib.Variant("s", core.load_state().get("language") or "auto"))
+        lang.connect("change-state", self.on_language)
+        self.add_action(lang)
 
         self.banner = Adw.Banner()
         self.banner.connect("button-clicked", lambda *_: self.on_setup())
@@ -65,9 +76,9 @@ class Window(Adw.ApplicationWindow):
 
         self.empty = Adw.StatusPage(
             icon_name="application-x-addon-symbolic",
-            title="Перетащи расширение сюда",
-            description="Файл .xpi, .zip или .crx, папку с manifest.json или ссылку. "
-                        "Добавить нужно один раз: дальше Zen сам загружает его при каждом запуске.")
+            title=_("Drop an Extension Here"),
+            description=_("An .xpi, .zip or .crx file, a folder with manifest.json, or a link. "
+                          "Add it once, and Zen loads it on every start."))
 
         self.stack = Gtk.Stack(vexpand=True)
         self.stack.add_named(self.empty, "empty")
@@ -90,7 +101,8 @@ class Window(Adw.ApplicationWindow):
         self.add_controller(text_drop)
 
         self.refresh()
-        GLib.timeout_add_seconds(REFRESH_SECONDS, self.refresh)
+        timer = GLib.timeout_add_seconds(REFRESH_SECONDS, self.refresh)
+        self.connect("destroy", lambda *_a: GLib.source_remove(timer))
 
     # ------------------------------------------------------------ list
 
@@ -106,11 +118,11 @@ class Window(Adw.ApplicationWindow):
             rows.append((e, statuses))
 
         if not profiles:
-            self._set_banner("Профиль Zen не найден. Запусти Zen хотя бы раз.", None)
+            self._set_banner(_("No Zen profile found. Start Zen at least once."), None)
         elif not all(core.profile_configured(p) for p in profiles):
-            self._set_banner("Профиль Zen ещё не настроен для своих расширений.", "Настроить")
+            self._set_banner(_("The Zen profile isn't set up for your own extensions yet."), _("Set Up"))
         elif pending:
-            self._set_banner("Перезапусти Zen, чтобы применить изменения.", None)
+            self._set_banner(_("Restart Zen to apply the changes."), None)
         else:
             self.banner.set_revealed(False)
 
@@ -122,7 +134,7 @@ class Window(Adw.ApplicationWindow):
         self._shown = key
         page = self.list_page
         page.remove(self.list_group)
-        self.list_group = Adw.PreferencesGroup(title="Установленные")
+        self.list_group = Adw.PreferencesGroup(title=_("Installed"))
         page.add(self.list_group)
         for e, statuses in rows:
             self.list_group.add(self._row(e, profiles, statuses))
@@ -134,13 +146,13 @@ class Window(Adw.ApplicationWindow):
                                   "disabled", "inactive") if s in statuses), "active")
         parts = [e["version"]]
         if len(profiles) > 1:
-            parts += [f"{p.name}: {core.STATUS_TEXT[s]}" for p, s in zip(profiles, statuses)]
+            parts += [f"{p.name}: {core.status_text(s)}" for p, s in zip(profiles, statuses)]
         elif statuses:
-            parts.append(core.STATUS_TEXT[statuses[0]])
+            parts.append(core.status_text(statuses[0]))
         if e.get("link"):
-            parts.append("следит за папкой")
+            parts.append(_("watches the folder"))
         if e.get("error"):
-            parts.append(f"ошибка сборки: {e['error']}")
+            parts.append(_("build error: {error}", error=e["error"]))
         row = Adw.ActionRow(title=GLib.markup_escape_text(e["name"]),
                             subtitle=GLib.markup_escape_text(" · ".join(parts)),
                             subtitle_lines=3)
@@ -151,19 +163,19 @@ class Window(Adw.ApplicationWindow):
         if src.exists():
             folder = src if src.is_dir() else src.parent
             open_btn = Gtk.Button(icon_name="folder-open-symbolic", valign=Gtk.Align.CENTER,
-                                  tooltip_text="Открыть папку источника")
+                                  tooltip_text=_("Open source folder"))
             open_btn.add_css_class("flat")
             open_btn.connect("clicked", lambda *_: Gio.AppInfo.launch_default_for_uri(
                 folder.as_uri(), None))
             row.add_suffix(open_btn)
         if e.get("link"):
             rebuild_btn = Gtk.Button(icon_name="view-refresh-symbolic", valign=Gtk.Align.CENTER,
-                                     tooltip_text="Пересобрать сейчас")
+                                     tooltip_text=_("Rebuild now"))
             rebuild_btn.add_css_class("flat")
             rebuild_btn.connect("clicked", lambda *_: self.on_rebuild(e))
             row.add_suffix(rebuild_btn)
         rm = Gtk.Button(icon_name="user-trash-symbolic", valign=Gtk.Align.CENTER,
-                        tooltip_text="Удалить")
+                        tooltip_text=_("Remove"))
         rm.add_css_class("flat")
         rm.connect("clicked", lambda *_: self.on_remove(e))
         row.add_suffix(rm)
@@ -190,9 +202,11 @@ class Window(Adw.ApplicationWindow):
                 try:
                     notes = []
                     e = core.add(s, on_notes=notes.append)
-                    msg = f"Добавлено: {e['name']} {e['version']}"
                     if e["link"]:
-                        msg += ", изменения в папке подхватываются сами"
+                        msg = _("Added: {name} {version}, folder changes are picked up automatically",
+                                name=e["name"], version=e["version"])
+                    else:
+                        msg = _("Added: {name} {version}", name=e["name"], version=e["version"])
                     GLib.idle_add(self.toast, msg)
                     for n in notes:
                         GLib.idle_add(self.toast, n)
@@ -206,9 +220,9 @@ class Window(Adw.ApplicationWindow):
         return True
 
     def on_add_file(self):
-        dialog = Gtk.FileDialog(title="Выбери расширение", modal=True)
+        dialog = Gtk.FileDialog(title=_("Choose an Extension"), modal=True)
         filters = Gio.ListStore.new(Gtk.FileFilter)
-        f = Gtk.FileFilter(name="Расширения (.xpi, .zip, .crx)")
+        f = Gtk.FileFilter(name=_("Extensions (.xpi, .zip, .crx)"))
         for pattern in ("*.xpi", "*.zip", "*.crx"):
             f.add_pattern(pattern)
         filters.append(f)
@@ -223,7 +237,7 @@ class Window(Adw.ApplicationWindow):
         dialog.open_multiple(self, None, done)
 
     def on_add_folder(self):
-        dialog = Gtk.FileDialog(title="Папка с manifest.json", modal=True)
+        dialog = Gtk.FileDialog(title=_("Folder with manifest.json"), modal=True)
 
         def done(d, res):
             try:
@@ -236,16 +250,16 @@ class Window(Adw.ApplicationWindow):
     def on_add_url(self):
         entry = Gtk.Entry(placeholder_text="https://…", activates_default=True, hexpand=True)
         dialog = Adw.AlertDialog(
-            heading="Добавить по ссылке",
-            body="Прямая ссылка на .xpi/.crx или страница addons.mozilla.org / Chrome Web Store.",
+            heading=_("Add from URL"),
+            body=_("A direct link to an .xpi/.crx, or an addons.mozilla.org / Chrome Web Store page."),
             extra_child=entry, default_response="add", close_response="cancel")
-        dialog.add_response("cancel", "Отмена")
-        dialog.add_response("add", "Добавить")
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("add", _("Add"))
         dialog.set_response_appearance("add", Adw.ResponseAppearance.SUGGESTED)
 
         def done(d, res):
             if d.choose_finish(res) == "add" and entry.get_text().strip():
-                self.toast("Скачиваю…")
+                self.toast(_("Downloading…"))
                 self.add_sources([entry.get_text().strip()])
         dialog.choose(self, None, done)
 
@@ -253,11 +267,11 @@ class Window(Adw.ApplicationWindow):
 
     def on_remove(self, e):
         dialog = Adw.AlertDialog(
-            heading=f"Удалить «{e['name']}»?",
-            body="Расширение пропадёт из Zen после перезапуска. Его данные в Zen тоже удалятся.",
+            heading=_("Remove “{name}”?", name=e["name"]),
+            body=_("The extension disappears from Zen after a restart. Its data in Zen is deleted too."),
             default_response="cancel", close_response="cancel")
-        dialog.add_response("cancel", "Отмена")
-        dialog.add_response("remove", "Удалить")
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("remove", _("Remove"))
         dialog.set_response_appearance("remove", Adw.ResponseAppearance.DESTRUCTIVE)
 
         def done(d, res):
@@ -265,7 +279,7 @@ class Window(Adw.ApplicationWindow):
                 return
             try:
                 core.remove(e["id"])
-                self.toast(f"Удалено: {e['name']}")
+                self.toast(_("Removed: {name}", name=e["name"]))
             except (core.ZenExtError, OSError) as err:
                 self.error(str(err))
             self.force_refresh()
@@ -275,7 +289,7 @@ class Window(Adw.ApplicationWindow):
         try:
             with core.locked_state() as state:
                 core.rebuild(e["id"], state)
-            self.toast(f"Пересобрано: {e['name']}")
+            self.toast(_("Rebuilt: {name}", name=e["name"]))
         except (core.ZenExtError, OSError) as err:
             self.error(str(err))
         self.force_refresh()
@@ -285,7 +299,7 @@ class Window(Adw.ApplicationWindow):
             with core.locked_state() as state:
                 for p in core.target_profiles(state):
                     core.configure_profile(p)
-            self.toast("Готово. Перезапусти Zen.")
+            self.toast(_("Done. Restart Zen."))
         except OSError as err:
             self.error(str(err))
         self.force_refresh()
@@ -295,7 +309,7 @@ class Window(Adw.ApplicationWindow):
         for err in errors:
             self.error(err)
         if not errors:
-            self.toast("Все расширения на месте")
+            self.toast(_("All extensions are in place"))
         self.force_refresh()
 
     def on_open_data(self):
@@ -306,20 +320,20 @@ class Window(Adw.ApplicationWindow):
         state = core.load_state()
         current = {p.key for p in core.target_profiles(state)}
         group = Adw.PreferencesGroup(
-            description="Куда ставить расширения. Обычно достаточно профиля, который Zen "
-                        "открывает по умолчанию.")
+            description=_("Where to install extensions. Usually the profile Zen opens by default "
+                          "is enough."))
         switches = []
         for p in core.find_profiles():
             row = Adw.SwitchRow(title=GLib.markup_escape_text(p.name),
                                 subtitle=GLib.markup_escape_text(
-                                    ("по умолчанию · " if p.default else "") + str(p.path)),
+                                    (_("default") + " · " if p.default else "") + str(p.path)),
                                 active=p.key in current)
             group.add(row)
             switches.append((p, row))
-        dialog = Adw.AlertDialog(heading="Профили Zen", extra_child=group,
+        dialog = Adw.AlertDialog(heading=_("Zen Profiles"), extra_child=group,
                                  default_response="save", close_response="cancel")
-        dialog.add_response("cancel", "Отмена")
-        dialog.add_response("save", "Сохранить")
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("save", _("Save"))
         dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
 
         def done(d, res):
@@ -327,19 +341,27 @@ class Window(Adw.ApplicationWindow):
                 return
             chosen = [p.path for p, row in switches if row.get_active()]
             if not chosen:
-                self.error("Нужен хотя бы один профиль")
+                self.error(_("Select at least one profile"))
                 return
             try:
                 core.set_profiles(chosen)
-                self.toast("Профили сохранены. Перезапусти Zen.")
+                self.toast(_("Profiles saved. Restart Zen."))
             except (core.ZenExtError, OSError) as err:
                 self.error(str(err))
             self.force_refresh()
         dialog.choose(self, None, done)
 
+    def on_language(self, action, value):
+        action.set_state(value)
+        core.set_language(value.get_string())
+        # Every label is set at construction, so rebuild the window in the new language.
+        app = self.get_application()
+        Window(app).present()
+        self.destroy()
+
     def error(self, text):
-        dialog = Adw.AlertDialog(heading="Не получилось", body=text)
-        dialog.add_response("ok", "Понятно")
+        dialog = Adw.AlertDialog(heading=_("Something Went Wrong"), body=text)
+        dialog.add_response("ok", _("OK"))
         dialog.present(self)
 
 

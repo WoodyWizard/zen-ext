@@ -8,6 +8,7 @@ import sys
 import time
 
 from . import core
+from .i18n import _
 
 POLL_SECONDS = 1.5
 
@@ -17,13 +18,13 @@ def log(msg):
 
 
 def run():
-    log("zen-ext watch: слежу за связанными папками")
+    log(_("zen-ext watch: watching linked folders"))
     pending = {}  # ext_id -> signature seen on the previous tick
     while True:
         try:
             tick(pending)
         except Exception as e:  # keep the service alive, report and retry
-            log(f"Ошибка: {e}")
+            log(_("Error: {error}", error=e))
         time.sleep(POLL_SECONDS)
 
 
@@ -49,7 +50,7 @@ def tick(pending):
                 continue
             try:
                 e = core.rebuild(ext_id, locked)
-                log(f"Пересобрано: {e['name']} {e['version']}")
+                log(_("Rebuilt: {name} {version}", name=e["name"], version=e["version"]))
             except core.ZenExtError as err:
                 # Remember the broken signature so it isn't retried every tick.
                 locked["extensions"][ext_id].update(source_sig=sig, error=str(err))

@@ -67,12 +67,12 @@ def run_zen(expect, timeout=60):
     stop_zen(proc)
     if not (PROFILE / "prefs.js").exists():
         tail = LOG.read_text(errors="replace").strip().splitlines()[-15:]
-        print("FAIL Zen не запустился с тестовым профилем, до расширений дело не дошло.")
-        print(f"     Вывод Zen ({LOG}):")
-        for line in tail or ["(пусто)"]:
+        print("FAIL Zen didn't start with the test profile, extensions were never reached.")
+        print(f"     Zen output ({LOG}):")
+        for line in tail or ["(empty)"]:
             print("     | " + line)
         if any("bwrap" in line for line in tail):
-            print("     Похоже на песочницу оболочки: запусти тест в обычном терминале, не через «!».")
+            print("     Looks like a shell sandbox: run the test in a regular terminal, not via \"!\".")
         sys.exit(2)
     return list(hits)
 
@@ -128,14 +128,14 @@ def main():
 
     got = run_zen(["dev-1.0", "chrome-5.0"])
     if "dev-1.0" not in got:
-        print(f"     Расширения в Zen: {addons()}")
-    check("dev-1.0" in got, "неподписанная папка без ID загрузилась и её фон работает")
-    check("chrome-5.0" in got, "Chrome .crx с service worker загрузился и работает")
+        print(f"     Extensions in Zen: {addons()}")
+    check("dev-1.0" in got, "unsigned folder without an ID loaded and its background runs")
+    check("chrome-5.0" in got, "Chrome .crx with a service worker loaded and runs")
     a = addons()
     check(a.get("e2e-dev@zen-ext.local") == ("1.0", True), f"extensions.json: {a}")
     state = core.load_state()
     check(all(core.status(e, core.Profile("e2e", PROFILE, False)) == "active"
-              for e in state["extensions"].values()), "zen-ext видит оба как «работает»")
+              for e in state["extensions"].values()), "zen-ext sees both as active")
 
     write_ext(dev, {"manifest_version": 2, "name": "E2E Dev", "version": "1.1",
                     "background": {"scripts": ["bg.js"]}}, "bg.js", "dev-1.1", port)
@@ -144,15 +144,15 @@ def main():
     watch.tick(pending)
     watch.tick(pending)
     got = run_zen(["dev-1.1", "chrome-5.0"])
-    check("dev-1.1" in got and "dev-1.0" not in got, "после правки папки загрузилась новая версия")
-    check(addons().get("e2e-dev@zen-ext.local") == ("1.1", True), "в Zen версия 1.1")
+    check("dev-1.1" in got and "dev-1.0" not in got, "after editing the folder, the new version loaded")
+    check(addons().get("e2e-dev@zen-ext.local") == ("1.1", True), "Zen has version 1.1")
 
     core.remove("e2e-chrome@zen-ext.local")
     got = run_zen(["dev-1.1"])
     time.sleep(2)
-    check("chrome-5.0" not in got, "удалённое расширение больше не запускается")
-    check("e2e-chrome@zen-ext.local" not in addons(), "и пропало из Zen")
-    print("Все проверки пройдены")
+    check("chrome-5.0" not in got, "the removed extension no longer runs")
+    check("e2e-chrome@zen-ext.local" not in addons(), "and is gone from Zen")
+    print("All checks passed")
 
 
 if __name__ == "__main__":
