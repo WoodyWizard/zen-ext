@@ -1,129 +1,131 @@
-# Расширения Zen
+# Zen Extensions
 
-Программа для [Zen Browser](https://zen-browser.app/), которая ставит **свои и любые другие расширения** без публикации в addons.mozilla.org. Добавляешь расширение один раз, и Zen сам загружает его при каждом запуске. Держать программу открытой не нужно.
+A tool for [Zen Browser](https://zen-browser.app/) that installs **your own and any other extensions** without publishing them on addons.mozilla.org. Add an extension once, and Zen loads it on every start. The tool doesn't need to stay open.
 
-Что можно добавить:
+What you can add:
 
-- папку с `manifest.json`, например свой проект. Папка связывается с программой: после правок расширение пересобирается само;
-- файл `.xpi` или `.zip`, в том числе архив с GitHub, где всё лежит во вложенной папке;
-- `.crx` из Chrome;
-- ссылку: прямую на файл, страницу addons.mozilla.org или Chrome Web Store.
+- a folder with `manifest.json`, such as your own project. The folder stays linked to the tool: after you edit it, the extension is rebuilt automatically;
+- an `.xpi` or `.zip` file, including a GitHub archive where everything sits in a nested folder;
+- a `.crx` from Chrome;
+- a link: a direct file link, an addons.mozilla.org page, or a Chrome Web Store page.
 
-![Окно программы](docs/window.png)
+The app's interface is in Russian.
 
-## Установка
+![App window](docs/window.png)
+
+## Installation
 
 ```bash
 ./install.sh
 ```
 
-Права root не нужны. Установщик:
+No root access is needed. The installer:
 
-- копирует программу в `~/.local/share/zen-ext/app` и создаёт команду `~/.local/bin/zen-ext`. Папку проекта после установки можно удалить;
-- добавляет «Расширения Zen» в меню приложений. Файлы `.xpi` и `.crx` можно открывать через неё двойным кликом;
-- включает пользовательский сервис `zen-ext-watch`, который пересобирает связанные папки;
-- настраивает профиль, который Zen открывает по умолчанию (см. «Как это работает»).
+- copies the app to `~/.local/share/zen-ext/app` and creates the `~/.local/bin/zen-ext` command. You can delete the project folder after installing;
+- adds "Zen Extensions" to the application menu. You can open `.xpi` and `.crx` files with it by double-clicking;
+- enables the `zen-ext-watch` user service, which rebuilds linked folders;
+- configures the profile Zen opens by default (see "How it works").
 
-После установки **перезапусти Zen** один раз.
+After installing, **restart Zen** once.
 
-Другой профиль можно указать так: `./install.sh --profile ~/.var/app/app.zen_browser.zen/config/zen/xxxx.Default`. Параметр можно повторить для нескольких профилей.
+To use a different profile: `./install.sh --profile ~/.var/app/app.zen_browser.zen/config/zen/xxxx.Default`. Repeat the option for several profiles.
 
-Для окна нужны PyGObject, GTK 4 и libadwaita. В Fedora с GNOME они уже установлены. Команды работают и без них.
+The window requires PyGObject, GTK 4 and libadwaita. Fedora with GNOME already has them. The commands work without them.
 
-## Как пользоваться
+## Usage
 
-**Окно.** Перетащи в него файл, папку или ссылку либо нажми «+». Кнопки в строке расширения открывают папку источника, пересобирают связанную папку и удаляют расширение. Когда нужно перезапустить Zen, сверху появляется напоминание.
+**Window.** Drag a file, folder or link into it, or click "+". The buttons in an extension's row open the source folder, rebuild the linked folder, and remove the extension. When Zen needs a restart, a reminder appears at the top.
 
-**Терминал:**
+**Terminal:**
 
 ```bash
-zen-ext add ~/Projects/zen-tabs              # своя папка, пересобирается сама
-zen-ext add ~/Downloads/something.xpi        # файл копируется, оригинал можно удалить
-zen-ext add https://addons.mozilla.org/ru/firefox/addon/darkreader/
-zen-ext add https://chromewebstore.google.com/detail/<имя>/<id>
-zen-ext list                                 # что добавлено и в каком состоянии в Zen
-zen-ext remove zen-tabs                      # по ID или части имени
-zen-ext sync                                 # вернуть всё в профиль (например, после удаления в Zen)
-zen-ext profiles                             # профили Zen
+zen-ext add ~/Projects/zen-tabs              # your own folder, rebuilt automatically
+zen-ext add ~/Downloads/something.xpi        # the file is copied, the original can be deleted
+zen-ext add https://addons.mozilla.org/en-US/firefox/addon/darkreader/
+zen-ext add https://chromewebstore.google.com/detail/<name>/<id>
+zen-ext list                                 # what's added and its state in Zen
+zen-ext remove zen-tabs                      # by ID or part of the name
+zen-ext sync                                 # put everything back into the profile (e.g. after removing it in Zen)
+zen-ext profiles                             # Zen profiles
 ```
 
-Дополнительные параметры `add`:
+Extra `add` options:
 
-| Параметр | Что делает |
+| Option | What it does |
 |---|---|
-| `--copy` | взять папку как есть, без слежения за изменениями |
-| `--id ID` | свой ID, если в `manifest.json` его нет |
-| `--replace` | заменить расширение с тем же ID, установленное в Zen из магазина |
+| `--copy` | take the folder as is, without watching for changes |
+| `--id ID` | set your own ID if `manifest.json` has none |
+| `--replace` | replace an extension with the same ID installed in Zen from the store |
 
-Изменения применяются **после перезапуска Zen**. Так Firefox работает с расширениями, установленными через папку профиля.
+Changes take effect **after restarting Zen**. That's how Firefox handles extensions installed through the profile folder.
 
-## Как это работает
+## How it works
 
-Zen, как и Firefox, при каждом запуске просматривает папку `extensions/` профиля и загружает лежащие там файлы `<id>.xpi`. Zen собран без обязательной проверки подписи (`MOZ_REQUIRE_SIGNING` выключен), поэтому неподписанные расширения разрешаются обычной настройкой. Программа один раз добавляет в `user.js` профиля блок из трёх настроек:
+Like Firefox, Zen scans the profile's `extensions/` folder on every start and loads the `<id>.xpi` files it finds there. Zen is built without mandatory signature checks (`MOZ_REQUIRE_SIGNING` is off), so unsigned extensions can be allowed with a regular pref. The tool adds a block of three prefs to the profile's `user.js` once:
 
-| Настройка | Значение | Зачем |
+| Pref | Value | Why |
 |---|---|---|
-| `xpinstall.signatures.required` | `false` | разрешить неподписанные расширения |
-| `extensions.autoDisableScopes` | `14` | не выключать расширения, положенные в папку профиля (обычно Firefox выключает их и спрашивает пользователя) |
-| `extensions.startupScanScopes` | `1` | проверять папку профиля при каждом запуске: новые, изменённые и удалённые файлы |
+| `xpinstall.signatures.required` | `false` | allow unsigned extensions |
+| `extensions.autoDisableScopes` | `14` | don't disable extensions placed in the profile folder (normally Firefox disables them and asks the user) |
+| `extensions.startupScanScopes` | `1` | scan the profile folder on every start for new, changed and removed files |
 
-Остальное содержимое `user.js` не меняется. Блок отмечен комментариями `zen-ext`.
+The rest of `user.js` stays unchanged. The block is marked with `zen-ext` comments.
 
-При добавлении программа:
+When you add an extension, the tool:
 
-1. упаковывает расширение в `.xpi` и хранит копию в `~/.local/share/zen-ext/store/`;
-2. если в `manifest.json` нет ID, добавляет его: без ID Firefox не загружает расширение из папки профиля. ID строится из названия, например `my-ext@zen-ext.local`, и не меняется при обновлениях, поэтому настройки и данные расширения сохраняются;
-3. если это Chrome MV3 с `background.service_worker`, прописывает тот же файл в `background.scripts`, потому что фоновые service worker в Zen отключены;
-4. кладёт `.xpi` в `<профиль>/extensions/`.
+1. packs it into an `.xpi` and keeps a copy in `~/.local/share/zen-ext/store/`;
+2. adds an ID if `manifest.json` has none: without an ID, Firefox doesn't load an extension from the profile folder. The ID is derived from the name, e.g. `my-ext@zen-ext.local`, and stays the same across updates, so the extension's settings and data are kept;
+3. for a Chrome MV3 extension with `background.service_worker`, adds the same file to `background.scripts`, because background service workers are disabled in Zen;
+4. puts the `.xpi` into `<profile>/extensions/`.
 
-Программа трогает только расширения, которые добавлены через неё. Если расширение с таким же ID уже установлено из магазина, она остановится и попросит `--replace`.
+The tool only touches extensions added through it. If an extension with the same ID is already installed from the store, it stops and asks for `--replace`.
 
-Flatpak-обновления Zen ничего не ломают: всё хранится в профиле, а не в папке приложения.
+Zen Flatpak updates don't break anything: everything is stored in the profile, not in the app folder.
 
-## Состояния в списке
+## States in the list
 
-| Состояние | Что значит |
-|---|---|
-| работает | Zen загрузил расширение |
-| загрузится / обновится после перезапуска Zen | файл на месте, Zen его ещё не видел |
-| выключено в Zen | выключено в `about:addons`, включается там же |
-| Zen не может его загрузить | несовместимо, подробности в `about:addons` |
-| удалено из профиля | удалено в Zen. `zen-ext sync` вернёт его, `zen-ext remove` уберёт из списка |
+| State | Shown in the app as | Meaning |
+|---|---|---|
+| active | работает | Zen has loaded the extension |
+| pending / pending update | загрузится / обновится после перезапуска Zen | the file is in place, Zen hasn't seen it yet |
+| disabled | выключено в Zen | disabled in `about:addons`, re-enable it there |
+| incompatible | Zen не может его загрузить | not compatible, see `about:addons` for details |
+| missing | удалено из профиля | removed in Zen. `zen-ext sync` brings it back, `zen-ext remove` removes it from the list |
 
-## Ограничения
+## Limitations
 
-- Доступ в приватных окнах Firefox не выдаёт расширениям, добавленным через папку профиля, автоматически. Включи его в `about:addons` → расширение → «Запуск в приватных окнах».
-- Расширения для Chrome работают, только если используют API, которые есть в Firefox. `importScripts()` и другие возможности service worker недоступны.
-- Из связанных папок не упаковываются `.git`, `node_modules`, `web-ext-artifacts` и `*.xpi`. Если расширению нужны файлы из `node_modules`, сначала собери его и добавь папку сборки.
-- Удаление расширения стирает и его данные в Zen.
+- Firefox doesn't automatically grant private window access to extensions added through the profile folder. Enable it in `about:addons` → the extension → "Run in Private Windows".
+- Chrome extensions work only if they use APIs that Firefox has. `importScripts()` and other service worker features are unavailable.
+- `.git`, `node_modules`, `web-ext-artifacts` and `*.xpi` are not packed from linked folders. If the extension needs files from `node_modules`, build it first and add the build folder.
+- Removing an extension also erases its data in Zen.
 
-## Удаление программы
-
-```bash
-./uninstall.sh           # только программа; добавленные расширения продолжат работать
-./uninstall.sh --purge   # ещё убрать эти расширения из Zen и блок из user.js
-```
-
-## Разработка
+## Uninstalling
 
 ```bash
-python3 -m unittest discover -s tests       # быстрые тесты
-python3 tools/e2e.py                        # проверка на настоящем Zen в отдельном профиле .dev/e2e
-python3 tools/gui_shot.py docs/window.png   # скриншот окна с демо-данными
+./uninstall.sh           # the app only; added extensions keep working
+./uninstall.sh --purge   # also remove these extensions from Zen and the block from user.js
 ```
 
-`tools/e2e.py` запускает Zen в headless-режиме с временным профилем. Основной профиль и уже запущенный Zen тест не затрагивает. Тест проверяет три вещи:
+## Development
 
-- неподписанные расширения без ID (папка и `.crx` с service worker) загружаются, и их фоновый код выполняется;
-- после правки связанной папки загружается новая версия;
-- удалённое расширение пропадает.
+```bash
+python3 -m unittest discover -s tests       # fast tests
+python3 tools/e2e.py                        # test against real Zen in a separate .dev/e2e profile
+python3 tools/gui_shot.py docs/window.png   # window screenshot with demo data
+```
+
+`tools/e2e.py` runs Zen headless with a temporary profile. The test doesn't touch your main profile or an already running Zen. It checks three things:
+
+- unsigned extensions without an ID (a folder and a `.crx` with a service worker) load, and their background code runs;
+- after editing a linked folder, the new version is loaded;
+- a removed extension disappears.
 
 ```
 zen_ext/
-  core.py    профили, user.js, упаковка, установка, состояние
-  cli.py     команды zen-ext
-  gui.py     окно (GTK 4 + libadwaita)
-  watch.py   фоновая пересборка связанных папок
+  core.py    profiles, user.js, packing, installation, state
+  cli.py     zen-ext commands
+  gui.py     window (GTK 4 + libadwaita)
+  watch.py   background rebuild of linked folders
 install.sh, uninstall.sh
 tests/, tools/
 ```
